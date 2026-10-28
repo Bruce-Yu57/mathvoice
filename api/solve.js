@@ -1,6 +1,7 @@
 const Busboy = require('busboy');
 
 const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
+const GEMINI_TIMEOUT_MS = 35_000;
 const GEMINI_MODEL = 'gemini-3.8-flash';
 const ALLOWED_IMAGE_TYPES = new Set([
   'image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif', 'image/gif', 'image/avif'
@@ -85,7 +86,7 @@ module.exports = async function handler(req, res) {
     const parts = [{ text: prompt }];
     if (image) parts.push({ inlineData: { mimeType: image.mimeType, data: image.data } });
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 50000);
+    const timeout = setTimeout(() => controller.abort(), GEMINI_TIMEOUT_MS);
     let upstream;
     try {
       upstream = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`, {
@@ -93,7 +94,12 @@ module.exports = async function handler(req, res) {
         headers: { 'Content-Type': 'application/json', 'x-goog-api-key': process.env.GEMINI_API_KEY },
         body: JSON.stringify({
           contents: [{ role: 'user', parts }],
-          generationConfig: { responseMimeType: 'application/json', responseSchema }
+          generationConfig: {
+            responseMimeType: 'application/json',
+            responseSchema,
+            thinkingConfig: { thinkingLevel: 'low' },
+            maxOutputTokens: 4096
+          }
         }),
         signal: controller.signal
       });
