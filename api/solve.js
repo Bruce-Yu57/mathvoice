@@ -101,6 +101,11 @@ module.exports = async function handler(req, res) {
 
     const payload = await upstream.json().catch(() => ({}));
     if (!upstream.ok) {
+      console.error('Gemini request failed', {
+        status: upstream.status,
+        code: payload.error?.status || null,
+        message: String(payload.error?.message || 'No error message returned').slice(0, 500)
+      });
       const status = upstream.status === 429 ? 429 : 502;
       return res.status(status).json({ error: status === 429 ? '老師現在有點忙，請稍等一下再試。' : '題目暫時沒有辨識成功，請確認照片清楚後再試。' });
     }
@@ -112,6 +117,10 @@ module.exports = async function handler(req, res) {
     }
     return res.status(200).json(result);
   } catch (error) {
+    console.error('Solve function failed', {
+      name: error.name || 'Error',
+      message: String(error.message || 'Unknown error').slice(0, 300)
+    });
     const status = Number.isInteger(error.status) ? error.status : 502;
     return res.status(status).json({ error: status < 500 ? error.message : '老師暫時沒有解讀成功，請稍後再試。' });
   }
