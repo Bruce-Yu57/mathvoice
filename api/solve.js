@@ -4,7 +4,7 @@ const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
 const GROQ_TIMEOUT_MS = 35_000;
 const GROQ_MODEL = 'qwen/qwen3.8-27b';
 const ALLOWED_IMAGE_TYPES = new Set([
-  'image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif', 'image/gif', 'image/avif'
+  'image/jpeg', 'image/png', 'image/webp'
 ]);
 
 function readMultipart(req) {
