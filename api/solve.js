@@ -1,33 +1,11 @@
 const Busboy = require('busboy');
 
 const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
-const GEMINI_TIMEOUT_MS = 35_000;
-const GEMINI_MODEL = 'gemini-3.8-flash';
+const GROQ_TIMEOUT_MS = 35_000;
+const GROQ_MODEL = 'qwen/qwen3.8-27b';
 const ALLOWED_IMAGE_TYPES = new Set([
   'image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif', 'image/gif', 'image/avif'
 ]);
-
-const responseSchema = {
-  type: 'OBJECT',
-  properties: {
-    problem: { type: 'STRING', description: 'Read the one intended math problem, faithfully transcribed in Traditional Chinese.' },
-    steps: {
-      type: 'ARRAY', minItems: 3, maxItems: 6,
-      items: {
-        type: 'OBJECT',
-        properties: {
-          title: { type: 'STRING' },
-          lines: { type: 'ARRAY', items: { type: 'STRING' } },
-          note: { type: 'STRING', description: 'Short, student-friendly note to display on the chalkboard.' },
-          talk: { type: 'STRING', description: 'Natural spoken Traditional Chinese explanation. Teach the idea; do not read the equations aloud.' }
-        },
-        required: ['title', 'lines', 'note', 'talk']
-      }
-    },
-    topic: { type: 'STRING', description: 'A concise metacognitive recap of the key junior-high math idea and a useful self-check.' }
-  },
-  required: ['problem', 'steps', 'topic']
-};
 
 function readMultipart(req) {
   return new Promise((resolve, reject) => {
@@ -69,8 +47,8 @@ module.exports = async function handler(req, res) {
     res.setHeader('Allow', 'POST');
     return res.status(405).json({ error: '此服務只接受題目提交。' });
   }
-  if (!process.env.GEMINI_API_KEY) {
-    return res.status(503).json({ error: 'Gemini 服務尚未設定，完成部署後就能開始解題。' });
+  if (!process.env.GROQ_API_KEY) {
+    return res.status(503).json({ error: 'Groq 服務尚未設定，完成部署後就能開始解題。' });
   }
 
   try {
@@ -83,8 +61,10 @@ module.exports = async function handler(req, res) {
       '只使用國中七至九年級會學到的方法。計算要核對，答案要合理。最後 topic 用學生聽得懂的方式總結學科觀念、常見錯誤或自我檢查方法。',
       text ? `學生附上的題目文字（若與圖片不同，優先使用圖片中最清楚的主要題目，並保留重要條件）：\n${text}` : '請直接根據圖片辨識主要題目。'
     ].join('\n\n');
-    const parts = [{ text: prompt }];
-    if (image) parts.push({ inlineData: { mimeType: image.mimeType, data: image.data } });
+    const userContent = image ? [
+      { type: 'text', text: prompt },
+      { type: 'image_url', image_url: { url: `data:${image.mimeType};base64,${image.data}` } }
+    ] : prompt;
     const retryDeadline = Date.now() + 45_000;
     const maxAttempts = 3;
     let upstream;
@@ -93,19 +73,19 @@ module.exports = async function handler(req, res) {
       if (remainingMs < 2_000) break;
 
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), Math.min(GEMINI_TIMEOUT_MS, remainingMs - 1_000));
+      const timeout = setTimeout(() => controller.abort(), Math.min(GROQ_TIMEOUT_MS, remainingMs - 1_000));
       try {
-        upstream = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`, {
+        upstream = await fetch('https://api.groq.com/openai/v1/chat/completions', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'x-goog-api-key': process.env.GEMINI_API_KEY },
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${process.env.GROQ_API_KEY}` },
           body: JSON.stringify({
-            contents: [{ role: 'user', parts }],
-            generationConfig: {
-              responseMimeType: 'application/json',
-              responseSchema,
-              thinkingConfig: { thinkingLevel: 'low' },
-              maxOutputTokens: 4096
-            }
+            model: GROQ_MODEL,
+            messages: [
+              { role: 'system', content: '你是一位台灣國中數學老師。請依照使用者要求解題，使用繁體中文，最後只輸出一個合法 JSON 物件，不要加 Markdown 程式碼區塊。' },
+              { role: 'user', content: userContent }
+            ],
+            response_format: { type: 'json_object' },
+            max_completion_tokens: 4096
           }),
           signal: controller.signal
         });
@@ -122,20 +102,20 @@ module.exports = async function handler(req, res) {
 
     const payload = await upstream.json().catch(() => ({}));
     if (!upstream.ok) {
-      console.error('Gemini request failed', {
+      console.error('Groq request failed', {
         status: upstream.status,
-        code: payload.error?.status || null,
+        code: payload.error?.code || payload.error?.type || null,
         message: String(payload.error?.message || 'No error message returned').slice(0, 500)
       });
       const status = upstream.status === 429 ? 429 : upstream.status === 503 ? 503 : 502;
       const error = status === 503
-        ? 'Gemini 目前暫時忙碌，請稍等一下再試。'
+        ? 'Groq 目前暫時忙碌，請稍等一下再試。'
         : status === 429
           ? '老師現在有點忙，請稍等一下再試。'
           : '題目暫時沒有辨識成功，請確認照片清楚後再試。';
       return res.status(status).json({ error });
     }
-    const generated = payload.candidates?.[0]?.content?.parts?.map(part => part.text || '').join('');
+    const generated = payload.choices?.[0]?.message?.content;
     if (!generated) return res.status(502).json({ error: '老師沒有收到完整的解題內容，請再試一次。' });
     const result = JSON.parse(generated);
     if (typeof result.problem !== 'string' || typeof result.topic !== 'string' || !Array.isArray(result.steps) || result.steps.length < 3 || result.steps.length > 6) {
