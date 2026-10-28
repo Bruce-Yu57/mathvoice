@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#f7f5ef" />
+  <meta name="description" content="慢慢來數學小教室：上傳題目，用繁體中文語音一步一步學會國中數學。" />
+  <title>慢慢來｜數學小教室</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="#top" aria-label="慢慢來數學小教室首頁"><span class="brand-mark">＋</span><span>慢慢來<span class="brand-small">數學小教室</span></span></a>
+    <div class="topbar-right"><span class="grade-pill"><i></i> 國中數學・七至九年級</span><button class="about-btn" id="aboutBtn">怎麼使用 <span>↗</span></button></div>
+  </header>
+
+  <main id="top">
+    <section class="intro"><div class="eyebrow"><span>✳</span> 給你時間，聽懂每一步</div><h1>數學不用急，<span>我們一起想。</span></h1><p>把題目交給我，我們慢慢讀、慢慢算，一步一步找到答案。</p></section>
+
+    <section class="workspace" aria-label="數學解題教室">
+      <section class="question-panel panel">
+        <div class="panel-heading"><div class="heading-icon mint">01</div><div><h2>先把題目放上來</h2><p>一張題目就好，照片有點雜訊也沒關係。</p></div></div>
+        <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="上傳或貼上數學題目圖片">
+          <input id="fileInput" type="file" accept="image/*" hidden />
+          <div class="upload-icon"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M5 14v4.5A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5V14" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <strong>把題目圖片拖進來</strong><span>或點這裡選擇檔案，也可以直接按 Ctrl + V 貼上</span>
+          <div class="upload-actions"><button type="button" class="button button-light" id="chooseBtn">選擇圖片</button><label class="button button-quiet camera-button" for="cameraInput">拍一張照片</label><input id="cameraInput" type="file" accept="image/*" capture="environment" hidden /></div>
+          <span class="file-types">支援 JPG、PNG、HEIC ・ 手機和平板也可以使用</span>
+        </div>
+        <div class="image-preview" id="imagePreview" hidden><img id="previewImage" alt="已選擇的題目"/><div class="preview-overlay"><span class="preview-label">題目圖片</span><button id="removeImage" type="button" class="remove-btn" aria-label="移除圖片">移除</button></div></div>
+        <div class="text-entry"><label for="problemInput"><span class="input-label">也可以直接輸入題目</span><span class="optional-label">有圖片時不必填寫</span></label><textarea id="problemInput" rows="3" placeholder="例如：解方程式 3(x − 2) = 2x + 5"></textarea><button class="example-link" id="exampleBtn" type="button">試試看範例題 <span>→</span></button></div>
+        <button class="button button-primary solve-btn" id="solveBtn" type="button"><span>請老師幫我解題</span><span aria-hidden="true">↗</span></button>
+        <p class="privacy-note"><span>♡</span> 題目會送到 Gemini 解題，不儲存在本站。</p>
+      </section>
+
+      <section class="lesson-panel" aria-label="逐步講解區">
+        <div class="lesson-top"><div><div class="section-kicker">YOUR LESSON</div><h2>一起來解題</h2></div><div class="teacher-badge"><span class="teacher-face">☺</span><span>小老師 <i class="online-dot"></i></span></div></div>
+        <div class="lesson-progress" id="progressArea" hidden><div class="progress-meta"><span id="progressText">第 1 步，共 4 步</span><button type="button" id="readQuestion" class="listen-question">🔊 聽題目</button></div><div class="progress-track"><span id="progressBar"></span></div></div>
+        <div class="blackboard" id="blackboard"><div class="board-top"><span class="chalk-dot"></span><span class="chalk-dot"></span><span class="chalk-dot"></span><span class="board-label">小老師的黑板</span><span class="eraser">⌁</span></div><div class="board-content" id="boardContent"><div class="board-empty"><div class="doodle">x <span>?</span></div><strong>題目準備好，黑板就會亮起來</strong><span>每次看一個步驟，照自己的速度慢慢來。</span></div></div><div class="board-footer"><span>慢慢寫，慢慢懂</span><span>✳</span></div></div>
+        <div class="lesson-controls" id="lessonControls" hidden><button type="button" class="button button-light" id="prevBtn">← 上一步</button><button type="button" class="button button-primary start-btn" id="nextBtn"><span id="nextLabel">開始講解</span><span>→</span></button></div>
+        <div id="metaBox" class="meta-box" hidden><div class="meta-header"><span class="meta-sparkle">✳</span><div><span class="section-kicker">AFTER CLASS</span><h3>今天帶走的數學重點</h3></div></div><p id="metaText"></p><button id="readMeta" class="read-meta" type="button">🔊 聽聽看</button></div>
+        <div class="encouragement" id="encouragement"><span>☼</span><span>想快一點或慢一點都可以，<br/>這堂課跟著你的步調走。</span></div>
+      </section>
+    </section>
+    <footer><span>給每一個願意試試看的你</span><span>慢慢來數學小教室 <span class="footer-star">✳</span></span></footer>
+  </main>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <dialog id="helpDialog"><div class="dialog-content"><button class="dialog-close" id="closeDialog" aria-label="關閉">×</button><span class="eyebrow"><span>✳</span> 小小使用說明</span><h2>跟著自己的速度來上課</h2><ol><li>上傳、貼上或拍下題目照片；也可以直接輸入文字。</li><li>有圖片時不必再輸入題目文字，按下「請老師幫我解題」即可。</li><li>看完黑板的這一步，按「下一步」聽老師繼續。</li><li>最後一起回顧今天的數學重點。</li></ol><p>可以用 Ctrl + V 貼上剪貼簿裡的截圖，也可以用手機或平板拍照。</p><button class="button button-primary" id="gotIt">知道了</button></div></dialog>
+  <script src="app.js"></script>
+</body>
+</html>
+
