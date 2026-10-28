@@ -85,25 +85,40 @@ module.exports = async function handler(req, res) {
     ].join('\n\n');
     const parts = [{ text: prompt }];
     if (image) parts.push({ inlineData: { mimeType: image.mimeType, data: image.data } });
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), GEMINI_TIMEOUT_MS);
+    const retryDeadline = Date.now() + 45_000;
+    const maxAttempts = 3;
     let upstream;
-    try {
-      upstream = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': process.env.GEMINI_API_KEY },
-        body: JSON.stringify({
-          contents: [{ role: 'user', parts }],
-          generationConfig: {
-            responseMimeType: 'application/json',
-            responseSchema,
-            thinkingConfig: { thinkingLevel: 'low' },
-            maxOutputTokens: 4096
-          }
-        }),
-        signal: controller.signal
-      });
-    } finally { clearTimeout(timeout); }
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const remainingMs = retryDeadline - Date.now();
+      if (remainingMs < 2_000) break;
+
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), Math.min(GEMINI_TIMEOUT_MS, remainingMs - 1_000));
+      try {
+        upstream = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-goog-api-key': process.env.GEMINI_API_KEY },
+          body: JSON.stringify({
+            contents: [{ role: 'user', parts }],
+            generationConfig: {
+              responseMimeType: 'application/json',
+              responseSchema,
+              thinkingConfig: { thinkingLevel: 'low' },
+              maxOutputTokens: 4096
+            }
+          }),
+          signal: controller.signal
+        });
+      } finally { clearTimeout(timeout); }
+
+      const retryable = [429, 500, 502, 503, 504].includes(upstream.status);
+      if (!retryable || attempt === maxAttempts - 1) break;
+
+      await upstream.arrayBuffer().catch(() => {});
+      const delayMs = 500 * (2 ** attempt) + Math.floor(Math.random() * 300);
+      if (Date.now() + delayMs + 2_000 >= retryDeadline) break;
+      await new Promise(resolve => setTimeout(resolve, delayMs));
+    }
 
     const payload = await upstream.json().catch(() => ({}));
     if (!upstream.ok) {
@@ -112,8 +127,13 @@ module.exports = async function handler(req, res) {
         code: payload.error?.status || null,
         message: String(payload.error?.message || 'No error message returned').slice(0, 500)
       });
-      const status = upstream.status === 429 ? 429 : 502;
-      return res.status(status).json({ error: status === 429 ? '老師現在有點忙，請稍等一下再試。' : '題目暫時沒有辨識成功，請確認照片清楚後再試。' });
+      const status = upstream.status === 429 ? 429 : upstream.status === 503 ? 503 : 502;
+      const error = status === 503
+        ? 'Gemini 目前暫時忙碌，請稍等一下再試。'
+        : status === 429
+          ? '老師現在有點忙，請稍等一下再試。'
+          : '題目暫時沒有辨識成功，請確認照片清楚後再試。';
+      return res.status(status).json({ error });
     }
     const generated = payload.candidates?.[0]?.content?.parts?.map(part => part.text || '').join('');
     if (!generated) return res.status(502).json({ error: '老師沒有收到完整的解題內容，請再試一次。' });
