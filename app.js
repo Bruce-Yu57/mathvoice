@@ -221,9 +221,9 @@ function showLesson(problem, lesson) {
   document.querySelector('.lesson-panel').scrollIntoView({behavior:'smooth',block:'nearest'});
 }
 
-async function solveWithGemini(imageFile, text) {
+async function solveWithGroq(imageFile, text) {
   if (location.protocol === 'file:') {
-    throw new Error('題目已準備好。接上網站的 Gemini 解題服務後，就能開始辨識和講解。');
+    throw new Error('題目已準備好。請透過網站網址使用 Groq 解題服務，就能開始辨識和講解。');
   }
   const form = new FormData();
   if (imageFile) {
@@ -235,7 +235,7 @@ async function solveWithGemini(imageFile, text) {
   try {
     response = await fetch('/api/solve', { method: 'POST', body: form });
   } catch {
-    throw new Error('目前連不到 Gemini 解題服務。題目不用重傳，請稍後再試。');
+    throw new Error('目前連不到 AI 解題服務。題目不用重傳，請稍後再試。');
   }
   const result = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(result.error || '老師暫時沒有解讀成功，請確認題目清楚後再試一次。');
@@ -270,7 +270,7 @@ async function startLesson() {
   solveBtn.disabled = true;
   solveBtn.querySelector('span:first-child').textContent = currentFileUrl ? '老師正在看題目…' : '老師正在整理解法…';
   try {
-    const result = await solveWithGemini(currentImageFile, raw);
+    const result = await solveWithGroq(currentImageFile, raw);
     showLesson(result.problem, result.lesson);
   } catch (err) { showToast(err.message); }
   finally {
