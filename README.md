@@ -8,7 +8,7 @@
 
 ## 部署方式
 
-GitHub repository 用來保存網站原始碼；GitHub Pages 只能提供靜態檔案，無法安全地保管 Gemini 金鑰或執行 `/api/solve`。要讓照片辨識、AI 解題及相機功能可供學生跨裝置使用，請將 GitHub repository 連接到支援 Node.js functions 的 HTTPS 託管服務，例如 Vercel，並設定：
+GitHub repository 用來保存網站原始碼；GitHub Pages 只能提供靜態檔案，無法安全地保管 Groq 金鑰或執行 `/api/solve`。要讓照片辨識、AI 解題及相機功能可供學生跨裝置使用，請將 GitHub repository 連接到支援 Node.js functions 的 HTTPS 託管服務，例如 Vercel，並設定：
 
 1. 專案根目錄為 repository 根目錄，Node.js 20 或更新版本。
 2. 在託管平台的伺服器端環境變數新增 `GROQ_API_KEY`。
