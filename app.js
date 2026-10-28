@@ -246,17 +246,19 @@ async function solveWithGroq(imageFile, text) {
 }
 
 async function prepareImage(file) {
-  if (file.size <= 3.5 * 1024 * 1024) return file;
+  const maxBytes = 3.5 * 1024 * 1024;
+  const groqImageTypes = new Set(['image/jpeg', 'image/png', 'image/webp']);
+  if (file.size <= maxBytes && groqImageTypes.has(file.type)) return file;
   let bitmap;
   try { bitmap = await createImageBitmap(file); }
-  catch { throw new Error('這張圖片太大，且目前裝置無法縮小它。請重新截取較小範圍的題目照片。'); }
+  catch { throw new Error('目前無法轉換這張照片格式。請改用 JPG、PNG，或用相機重新拍攝。'); }
   try {
-    const scale = Math.min(1, 1800 / Math.max(bitmap.width, bitmap.height));
+    const scale = Math.min(1, 2200 / Math.max(bitmap.width, bitmap.height));
     const canvas = document.createElement('canvas');
     canvas.width = Math.round(bitmap.width * scale);
     canvas.height = Math.round(bitmap.height * scale);
     canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-    for (const quality of [0.84, 0.72, 0.6]) {
+    for (const quality of [0.92, 0.84, 0.72, 0.6]) {
       const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', quality));
       if (blob && blob.size <= 3.5 * 1024 * 1024) return new File([blob], 'question.jpg', { type: 'image/jpeg' });
     }
