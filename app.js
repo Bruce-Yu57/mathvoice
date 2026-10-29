@@ -185,8 +185,14 @@ function selectChineseVoice(voices) {
   return taiwaneseVoices.find(v => v.default) || taiwaneseVoices[0] || undefined;
 }
 
+function speechFriendly(text) {
+  return String(text)
+    .replace(/\\(?:dfrac|frac)\s*\{([^{}]+)\}\s*\{([^{}]+)\}/g, (_, numerator, denominator) => `${denominator}分之${numerator}`)
+    .replace(/\b(\d+)\s*\/\s*(\d+)\b/g, (_, numerator, denominator) => `${denominator}分之${numerator}`);
+}
+
 function makeUtterance(text, voice) {
-  const utterance = new SpeechSynthesisUtterance(text);
+  const utterance = new SpeechSynthesisUtterance(speechFriendly(text));
   utterance.lang = 'zh-TW'; utterance.rate = .91; utterance.pitch = 1.06; utterance.volume = 1;
   if (voice) utterance.voice = voice;
   return utterance;
@@ -209,18 +215,19 @@ async function prepareFirstSpeech(text) {
 function say(text) {
   if (!('speechSynthesis' in window)) { showToast('這個瀏覽器目前不支援語音播放，可以繼續閱讀黑板上的解說。'); return; }
   speechSynthesis.cancel();
-  const utterance = preparedFirstSpeech?.text === text
+  const spokenText = speechFriendly(text);
+  const utterance = preparedFirstSpeech?.text === spokenText
     ? preparedFirstSpeech
     : makeUtterance(text, selectChineseVoice(speechSynthesis.getVoices()));
-  if (preparedFirstSpeech?.text === text) preparedFirstSpeech = null;
+  if (preparedFirstSpeech?.text === spokenText) preparedFirstSpeech = null;
   speechSynthesis.speak(utterance);
 }
 
 function paintStep(index) {
   const step = solutionSteps[index];
   if (!step) return;
-  const lines = step.lines.map(line => `<div>${escapeHtml(line)}</div>`).join('');
-  boardContent.insertAdjacentHTML('beforeend', `<section class="chalk-step"><div class="step-number"><span>${index+1}</span> 第 ${index+1} 步</div><div class="step-title">${escapeHtml(step.title)}</div><div class="math-lines">${lines}<div class="math-note">${escapeHtml(step.note)}</div></div></section>`);
+  const lines = step.lines.map(line => `<div>${renderMathText(line)}</div>`).join('');
+  boardContent.insertAdjacentHTML('beforeend', `<section class="chalk-step"><div class="step-number"><span>${index+1}</span> 第 ${index+1} 步</div><div class="step-title">${renderMathText(step.title)}</div><div class="math-lines">${lines}<div class="math-note">${renderMathText(step.note)}</div></div></section>`);
   currentStep = index;
   $('#progressArea').hidden = false;
   $('#progressText').textContent = `第 ${index+1} 步，共 ${solutionSteps.length} 步`;
@@ -234,7 +241,7 @@ function paintStep(index) {
   say(step.talk);
   if (last) {
     $('#metaBox').hidden = false;
-    $('#metaText').textContent = lessonTopic;
+    $('#metaText').innerHTML = renderMathText(lessonTopic);
     $('#nextLabel').textContent = '再聽一次最後一步';
   }
 }
@@ -246,13 +253,26 @@ function nextStep() {
 }
 function escapeHtml(value) { return String(value).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch])); }
 
+function fractionMarkup(numerator, denominator) {
+  const top = numerator;
+  const bottom = denominator;
+  return `<span class="fraction" role="math" aria-label="${bottom}分之${top}"><span class="fraction-top">${top}</span><span class="fraction-bottom">${bottom}</span></span>`;
+}
+
+function renderMathText(value) {
+  let html = escapeHtml(value);
+  html = html.replace(/\\(?:dfrac|frac)\s*\{([^{}]+)\}\s*\{([^{}]+)\}/g, (_, numerator, denominator) => fractionMarkup(numerator, denominator));
+  return html.replace(/(^|[^A-Za-z0-9])((?:\([^()]+\))|(?:[A-Za-z0-9.]+))\s*\/\s*((?:\([^()]+\))|(?:[A-Za-z0-9.]+))(?=$|[^A-Za-z0-9])/g,
+    (_, prefix, numerator, denominator) => `${prefix}${fractionMarkup(numerator, denominator)}`);
+}
+
 function showLesson(problem, lesson) {
   lessonProblem = problem; solutionSteps = lesson.steps; lessonTopic = lesson.topic; currentStep = -1;
   preparedFirstSpeech = null;
   $('#progressArea').hidden = true; $('#metaBox').hidden = true; $('#lessonControls').hidden = false;
   $('#lessonControls').style.display = 'flex'; $('#nextBtn').disabled = true; $('#nextLabel').textContent = '語音準備中…';
   $('#prevBtn').onclick = () => { if(currentStep > 0) { boardContent.querySelectorAll('.chalk-step').forEach((el,i) => { if(i >= currentStep) el.remove(); }); paintStep(currentStep-1); } };
-  boardContent.innerHTML = `<div class="problem-on-board"><span class="board-problem-label">今天的題目</span>${escapeHtml(problem)}</div>`;
+  boardContent.innerHTML = `<div class="problem-on-board"><span class="board-problem-label">今天的題目</span>${renderMathText(problem)}</div>`;
   $('#encouragement').innerHTML = '<span>☼</span><span>題目讀好了，我們一起來解。<br/>按下「開始講解」就能從第一步開始。</span>';
   boardContent.scrollTop = 0;
   document.querySelector('.lesson-panel').scrollIntoView({behavior:'smooth',block:'nearest'});
