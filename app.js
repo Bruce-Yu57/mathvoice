@@ -169,10 +169,20 @@ function spokenEquation(s) {
   return s.replace(/([0-9.]+)x/g, (_, n) => `${n || '一'} x`).replace(/\bx\b/g,'x').replace(/=/g,'等於').replace(/\+/g,'加').replace(/-/g,'減').replace(/\*/g,'乘').replace(/\//g,'除以');
 }
 
+function isIPad() {
+  return /iPad/i.test(navigator.userAgent)
+    || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+}
+
 function selectChineseVoice(voices) {
-  return voices.find(v => /^zh-TW/i.test(v.lang) && /female|ting|mei|hui|sandy|yating|hsiao/i.test(v.name))
-    || voices.find(v => /^zh-TW/i.test(v.lang))
-    || voices.find(v => /^zh/i.test(v.lang));
+  const taiwaneseVoices = voices.filter(v => /^zh-TW(?:[-_]|$)/i.test(v.lang));
+  if (isIPad()) {
+    const meiJiaVoices = taiwaneseVoices.filter(v => /mei[\s_-]?jia|美佳/i.test(`${v.name} ${v.voiceURI}`));
+    const enhancedMeiJia = meiJiaVoices.find(v => /premium|enhanced|high[\s_-]?quality|高音質|提高品質/i.test(`${v.name} ${v.voiceURI}`));
+    if (enhancedMeiJia) return enhancedMeiJia;
+    if (meiJiaVoices.length) return meiJiaVoices[0];
+  }
+  return taiwaneseVoices.find(v => v.default) || taiwaneseVoices[0] || undefined;
 }
 
 function makeUtterance(text, voice) {
