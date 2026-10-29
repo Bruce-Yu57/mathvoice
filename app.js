@@ -15,6 +15,7 @@ let solutionSteps = [];
 let currentStep = -1;
 let lessonProblem = '';
 let toastTimer;
+let preparedFirstSpeech = null;
 
 const example = '解方程式：3(x − 2) = 2x + 5';
 const examples = {
@@ -168,14 +169,40 @@ function spokenEquation(s) {
   return s.replace(/([0-9.]+)x/g, (_, n) => `${n || '一'} x`).replace(/\bx\b/g,'x').replace(/=/g,'等於').replace(/\+/g,'加').replace(/-/g,'減').replace(/\*/g,'乘').replace(/\//g,'除以');
 }
 
+function selectChineseVoice(voices) {
+  return voices.find(v => /^zh-TW/i.test(v.lang) && /female|ting|mei|hui|sandy|yating|hsiao/i.test(v.name))
+    || voices.find(v => /^zh-TW/i.test(v.lang))
+    || voices.find(v => /^zh/i.test(v.lang));
+}
+
+function makeUtterance(text, voice) {
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.lang = 'zh-TW'; utterance.rate = .91; utterance.pitch = 1.06; utterance.volume = 1;
+  if (voice) utterance.voice = voice;
+  return utterance;
+}
+
+async function prepareFirstSpeech(text) {
+  if (!('speechSynthesis' in window) || !('SpeechSynthesisUtterance' in window)) return false;
+  let voices = speechSynthesis.getVoices();
+  if (!voices.length) {
+    await Promise.race([
+      new Promise(resolve => speechSynthesis.addEventListener('voiceschanged', resolve, { once: true })),
+      new Promise(resolve => setTimeout(resolve, 1500))
+    ]);
+    voices = speechSynthesis.getVoices();
+  }
+  preparedFirstSpeech = makeUtterance(text, selectChineseVoice(voices));
+  return true;
+}
+
 function say(text) {
   if (!('speechSynthesis' in window)) { showToast('這個瀏覽器目前不支援語音播放，可以繼續閱讀黑板上的解說。'); return; }
   speechSynthesis.cancel();
-  const utterance = new SpeechSynthesisUtterance(text);
-  utterance.lang = 'zh-TW'; utterance.rate = .91; utterance.pitch = 1.06; utterance.volume = 1;
-  const voices = speechSynthesis.getVoices();
-  const preferred = voices.find(v => /^zh-TW/i.test(v.lang) && /female|ting|mei|hui|sandy|yating|hsiao/i.test(v.name)) || voices.find(v => /^zh-TW/i.test(v.lang)) || voices.find(v => /^zh/i.test(v.lang));
-  if (preferred) utterance.voice = preferred;
+  const utterance = preparedFirstSpeech?.text === text
+    ? preparedFirstSpeech
+    : makeUtterance(text, selectChineseVoice(speechSynthesis.getVoices()));
+  if (preparedFirstSpeech?.text === text) preparedFirstSpeech = null;
   speechSynthesis.speak(utterance);
 }
 
@@ -192,7 +219,6 @@ function paintStep(index) {
   $('#prevBtn').style.opacity = index === 0 ? '.48' : '1';
   const last = index === solutionSteps.length - 1;
   $('#nextLabel').textContent = last ? '完成這堂課' : index === -1 ? '開始講解' : '下一步';
-  $('#nextBtn').onclick = nextStep;
   $('#encouragement').innerHTML = index === solutionSteps.length - 1 ? '<span>☼</span><span>太棒了，你把這題的思路走完了。<br/>記得看看今天帶走的數學重點！</span>' : '<span>☼</span><span>看完這一步，再按下一步繼續。<br/>不用急，慢慢想也可以。</span>';
   requestAnimationFrame(() => boardContent.scrollTo({top:boardContent.scrollHeight,behavior:'smooth'}));
   say(step.talk);
@@ -212,8 +238,9 @@ function escapeHtml(value) { return String(value).replace(/[&<>"']/g, ch => ({'&
 
 function showLesson(problem, lesson) {
   lessonProblem = problem; solutionSteps = lesson.steps; lessonTopic = lesson.topic; currentStep = -1;
+  preparedFirstSpeech = null;
   $('#progressArea').hidden = true; $('#metaBox').hidden = true; $('#lessonControls').hidden = false;
-  $('#lessonControls').style.display = 'flex'; $('#nextLabel').textContent = '開始講解';
+  $('#lessonControls').style.display = 'flex'; $('#nextBtn').disabled = true; $('#nextLabel').textContent = '語音準備中…';
   $('#prevBtn').onclick = () => { if(currentStep > 0) { boardContent.querySelectorAll('.chalk-step').forEach((el,i) => { if(i >= currentStep) el.remove(); }); paintStep(currentStep-1); } };
   boardContent.innerHTML = `<div class="problem-on-board"><span class="board-problem-label">今天的題目</span>${escapeHtml(problem)}</div>`;
   $('#encouragement').innerHTML = '<span>☼</span><span>題目讀好了，我們一起來解。<br/>按下「開始講解」就能從第一步開始。</span>';
@@ -270,10 +297,15 @@ async function startLesson() {
   const raw = problemInput.value.trim();
   if (!raw && !currentImageFile) { showToast('先輸入題目，或貼上一張題目照片吧。'); problemInput.focus(); return; }
   solveBtn.disabled = true;
+  $('#lessonControls').hidden = true;
   solveBtn.querySelector('span:first-child').textContent = currentFileUrl ? '老師正在看題目…' : '老師正在整理解法…';
   try {
     const result = await solveWithGroq(currentImageFile, raw);
     showLesson(result.problem, result.lesson);
+    const speechAvailable = await prepareFirstSpeech(result.lesson.steps[0].talk);
+    $('#nextBtn').disabled = false;
+    $('#nextLabel').textContent = '開始講解';
+    if (!speechAvailable) showToast('第一步文字已準備好；這個瀏覽器沒有語音功能，仍可逐步閱讀解說。');
   } catch (err) { showToast(err.message); }
   finally {
     solveBtn.disabled = false;
@@ -293,6 +325,7 @@ dropzone.addEventListener('drop',e=>loadImage(e.dataTransfer.files[0]));
 document.addEventListener('paste',e=>{const image=[...e.clipboardData.items].find(item=>item.type.startsWith('image/'));if(image){loadImage(image.getAsFile());showToast('截圖貼上成功！可以直接請老師解題，不必輸入文字。');}});
 $('#exampleBtn').addEventListener('click',()=>{problemInput.value=example;problemInput.focus();});
 solveBtn.addEventListener('click',startLesson);
+$('#nextBtn').addEventListener('click', nextStep);
 $('#readQuestion').addEventListener('click',()=>say(`今天的題目是：${lessonProblem}。`));
 $('#readMeta').addEventListener('click',()=>say(lessonTopic));
 $('#aboutBtn').addEventListener('click',()=>$('#helpDialog').showModal());
