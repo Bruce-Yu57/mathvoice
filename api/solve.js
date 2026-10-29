@@ -7,6 +7,30 @@ const ALLOWED_IMAGE_TYPES = new Set([
   'image/jpeg', 'image/png', 'image/webp'
 ]);
 
+const RESPONSE_SCHEMA = {
+  type: 'object',
+  properties: {
+    problem: { type: 'string' },
+    steps: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          title: { type: 'string' },
+          lines: { type: 'array', items: { type: 'string' } },
+          note: { type: 'string' },
+          talk: { type: 'string' }
+        },
+        required: ['title', 'lines', 'note', 'talk'],
+        additionalProperties: false
+      }
+    },
+    topic: { type: 'string' }
+  },
+  required: ['problem', 'steps', 'topic'],
+  additionalProperties: false
+};
+
 function readMultipart(req) {
   return new Promise((resolve, reject) => {
     let parser;
@@ -84,7 +108,16 @@ module.exports = async function handler(req, res) {
               { role: 'system', content: '你是一位台灣國中數學老師。請依照使用者要求解題，使用繁體中文，最後只輸出一個合法 JSON 物件，不要加 Markdown 程式碼區塊。' },
               { role: 'user', content: userContent }
             ],
-            response_format: { type: 'json_object' },
+            response_format: {
+              type: 'json_schema',
+              json_schema: {
+                name: 'junior_high_math_lesson',
+                strict: true,
+                schema: RESPONSE_SCHEMA
+              }
+            },
+            reasoning_format: 'hidden',
+            reasoning_effort: 'low',
             max_completion_tokens: 4096
           }),
           signal: controller.signal
